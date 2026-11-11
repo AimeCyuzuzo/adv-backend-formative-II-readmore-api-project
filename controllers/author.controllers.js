@@ -75,8 +75,18 @@ const deleteAuthor = async (req, res) => {
     if (!mongoose.isValidObjectId(id)) return notFound(res, id);
 
     try {
-        const author = await Author.findByIdAndDelete(id);
+        const author = await Author.findById(id);
         if (!author) return notFound(res, id);
+
+        const bookCount = await Book.countDocuments({ author: id });
+        if (bookCount > 0) {
+            return res.status(409).json({
+                message: `Cannot delete ${author.name}: they still have ${bookCount} book(s). Delete or reassign their books first, e.g. with DELETE /authors/${id}/books.`,
+                bookCount,
+            });
+        }
+
+        await Author.findByIdAndDelete(id);
         res.status(200).json({ message: 'Author deleted successfully', author });
     } catch (error) {
         handleError(res, error);
@@ -99,6 +109,25 @@ const getAuthorBooks = async (req, res) => {
     }
 };
 
+// DELETE /authors/:id/books
+const deleteAuthorBooks = async (req, res) => {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return notFound(res, id);
+
+    try {
+        const author = await Author.findById(id);
+        if (!author) return notFound(res, id);
+
+        const { deletedCount } = await Book.deleteMany({ author: id });
+        res.status(200).json({
+            message: `Deleted ${deletedCount} book(s) by ${author.name}`,
+            deletedCount,
+        });
+    } catch (error) {
+        handleError(res, error);
+    }
+};
+
 module.exports = {
     createAuthor,
     getAllAuthors,
@@ -106,4 +135,5 @@ module.exports = {
     updateAuthor,
     deleteAuthor,
     getAuthorBooks,
+    deleteAuthorBooks,
 };
