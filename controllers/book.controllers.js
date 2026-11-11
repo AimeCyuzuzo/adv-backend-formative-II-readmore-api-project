@@ -28,10 +28,43 @@ const isDuplicateTitle = (title, author, excludeId) => {
 const duplicateTitle = (res, title) =>
     res.status(409).json({ message: `This author already has a book titled "${String(title).trim()}"` });
 
+const validateBookRules = ({ price, publishedYear }) => {
+    const errors = [];
+
+    if (price !== undefined) {
+        const value = Number(price);
+        if (!Number.isFinite(value)) {
+            errors.push('price must be a number');
+        } else if (value <= 0) {
+            errors.push('price must be greater than 0');
+        }
+    }
+
+    if (publishedYear !== undefined) {
+        const value = Number(publishedYear);
+        const currentYear = new Date().getFullYear();
+        if (!Number.isInteger(value)) {
+            errors.push('publishedYear must be a whole number');
+        } else if (value < 1450) {
+            errors.push('publishedYear cannot be before 1450');
+        } else if (value > currentYear) {
+            errors.push(`publishedYear cannot be in the future (after ${currentYear})`);
+        }
+    }
+
+    return errors;
+};
+
+const invalidRules = (res, errors) =>
+    res.status(422).json({ message: 'Book data breaks the store rules', errors });
+
 // POST /books
 const createBook = async (req, res) => {
     try {
         const { title, genre, price, publishedYear, author } = req.body;
+
+        const ruleErrors = validateBookRules({ price, publishedYear });
+        if (ruleErrors.length) return invalidRules(res, ruleErrors);
 
         if (!(await authorExists(author))) {
             return res.status(400).json({ message: `No author found with id ${author}` });
@@ -80,6 +113,9 @@ const updateBook = async (req, res) => {
 
     try {
         const { title, genre, price, publishedYear, author } = req.body;
+
+        const ruleErrors = validateBookRules({ price, publishedYear });
+        if (ruleErrors.length) return invalidRules(res, ruleErrors);
 
         const existing = await Book.findById(id);
         if (!existing) return notFound(res, id);
