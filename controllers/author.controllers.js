@@ -128,6 +128,54 @@ const deleteAuthorBooks = async (req, res) => {
     }
 };
 
+// GET /authors/:id/stats
+const getAuthorStats = async (req, res) => {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return notFound(res, id);
+
+    try {
+        const author = await Author.findById(id);
+        if (!author) return notFound(res, id);
+
+        const [stats] = await Book.aggregate([
+            { $match: { author: author._id } },
+            { $sort: { price: 1, title: 1 } },
+            {
+                $group: {
+                    _id: null,
+                    bookCount: { $sum: 1 },
+                    averagePrice: { $avg: '$price' },
+                    cheapestBook: { $first: '$title' },
+                    maxPrice: { $max: '$price' },
+                    books: { $push: { title: '$title', price: '$price' } },
+                },
+            },
+        ]);
+
+        if (!stats) {
+            return res.status(200).json({
+                author: author.name,
+                bookCount: 0,
+                averagePrice: null,
+                cheapestBook: null,
+                mostExpensiveBook: null,
+            });
+        }
+
+        const mostExpensiveBook = stats.books.find((book) => book.price === stats.maxPrice).title;
+
+        res.status(200).json({
+            author: author.name,
+            bookCount: stats.bookCount,
+            averagePrice: Math.round(stats.averagePrice * 100) / 100,
+            cheapestBook: stats.cheapestBook,
+            mostExpensiveBook,
+        });
+    } catch (error) {
+        handleError(res, error);
+    }
+};
+
 module.exports = {
     createAuthor,
     getAllAuthors,
@@ -136,4 +184,5 @@ module.exports = {
     deleteAuthor,
     getAuthorBooks,
     deleteAuthorBooks,
+    getAuthorStats,
 };

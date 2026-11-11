@@ -7,6 +7,7 @@ const {
     deleteAuthor,
     getAuthorBooks,
     deleteAuthorBooks,
+    getAuthorStats,
 } = require('../controllers/author.controllers');
 
 const router = express.Router();
@@ -23,5 +24,7 @@ router.route('/:id')
 router.route('/:id/books')
     .get(getAuthorBooks)
     .delete(deleteAuthorBooks);
+
+router.get('/:id/stats', getAuthorStats);
 
 module.exports = router;
