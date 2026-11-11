@@ -58,6 +58,79 @@ const validateBookRules = ({ price, publishedYear }) => {
 const invalidRules = (res, errors) =>
     res.status(422).json({ message: 'Book data breaks the store rules', errors });
 
+const SORTABLE_FIELDS = ['price', 'title', 'publishedYear'];
+
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const buildBookQuery = (query) => {
+    const { genre, minPrice, maxPrice, author, search, sort, order } = query;
+    const filter = {};
+    const errors = [];
+
+    for (const [name, value] of Object.entries({ genre, minPrice, maxPrice, author, search, sort, order })) {
+        if (value !== undefined && typeof value !== 'string') {
+            errors.push(`${name} must be given only once`);
+        }
+    }
+    if (errors.length) return { errors };
+
+    if (genre) {
+        filter.genre = new RegExp(`^${escapeRegex(genre.trim())}$`, 'i');
+    }
+
+    if (search) {
+        filter.title = new RegExp(escapeRegex(search.trim()), 'i');
+    }
+
+    if (author !== undefined) {
+        if (mongoose.isValidObjectId(author)) {
+            filter.author = author;
+        } else {
+            errors.push(`author must be a valid id, got "${author}"`);
+        }
+    }
+
+    const priceRange = {};
+    if (minPrice !== undefined) {
+        const value = Number(minPrice);
+        if (minPrice.trim() === '' || !Number.isFinite(value)) {
+            errors.push('minPrice must be a number');
+        } else {
+            priceRange.$gte = value;
+        }
+    }
+    if (maxPrice !== undefined) {
+        const value = Number(maxPrice);
+        if (maxPrice.trim() === '' || !Number.isFinite(value)) {
+            errors.push('maxPrice must be a number');
+        } else {
+            priceRange.$lte = value;
+        }
+    }
+    if (priceRange.$gte !== undefined && priceRange.$lte !== undefined && priceRange.$gte > priceRange.$lte) {
+        errors.push('minPrice cannot be greater than maxPrice');
+    }
+    if (Object.keys(priceRange).length) {
+        filter.price = priceRange;
+    }
+
+    let sortBy = { createdAt: -1 };
+    if (sort !== undefined) {
+        if (!SORTABLE_FIELDS.includes(sort)) {
+            errors.push(`sort must be one of: ${SORTABLE_FIELDS.join(', ')}`);
+        }
+        const direction = (order ?? 'asc').toLowerCase();
+        if (!['asc', 'desc'].includes(direction)) {
+            errors.push('order must be asc or desc');
+        }
+        sortBy = { [sort]: direction === 'desc' ? -1 : 1 };
+    } else if (order !== undefined && !['asc', 'desc'].includes(order.toLowerCase())) {
+        errors.push('order must be asc or desc');
+    }
+
+    return { filter, sortBy, errors };
+};
+
 // POST /books
 const createBook = async (req, res) => {
     try {
@@ -85,7 +158,12 @@ const createBook = async (req, res) => {
 // GET /books
 const getAllBooks = async (req, res) => {
     try {
-        const books = await Book.find().populate('author').sort({ createdAt: -1 });
+        const { filter, sortBy, errors } = buildBookQuery(req.query);
+        if (errors.length) {
+            return res.status(400).json({ message: 'Invalid query parameters', errors });
+        }
+
+        const books = await Book.find(filter).populate('author').sort(sortBy);
         res.status(200).json(books);
     } catch (error) {
         handleError(res, error);
