@@ -4,11 +4,13 @@ const express = require('express');
 const mongoose = require('mongoose');
 const authorRoutes = require('./routes/author.routes');
 const bookRoutes = require('./routes/book.routes');
+const requestLogger = require('./middleware/logger');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI;
 
+app.use(requestLogger);
 app.use(express.json());
 
 app.get('/', (req, res) => {
