@@ -19,6 +19,15 @@ const handleError = (res, error) => {
 const authorExists = async (authorId) =>
     mongoose.isValidObjectId(authorId) && (await Author.exists({ _id: authorId })) !== null;
 
+const isDuplicateTitle = (title, author, excludeId) => {
+    const filter = { author, title: String(title).trim() };
+    if (excludeId) filter._id = { $ne: excludeId };
+    return Book.exists(filter).collation({ locale: 'en', strength: 2 });
+};
+
+const duplicateTitle = (res, title) =>
+    res.status(409).json({ message: `This author already has a book titled "${String(title).trim()}"` });
+
 // POST /books
 const createBook = async (req, res) => {
     try {
@@ -26,6 +35,10 @@ const createBook = async (req, res) => {
 
         if (!(await authorExists(author))) {
             return res.status(400).json({ message: `No author found with id ${author}` });
+        }
+
+        if (typeof title === 'string' && (await isDuplicateTitle(title, author))) {
+            return duplicateTitle(res, title);
         }
 
         const book = await Book.create({ title, genre, price, publishedYear, author });
@@ -68,9 +81,20 @@ const updateBook = async (req, res) => {
     try {
         const { title, genre, price, publishedYear, author } = req.body;
 
+        const existing = await Book.findById(id);
+        if (!existing) return notFound(res, id);
+
         // Only check the author if the client is trying to change it.
         if (author !== undefined && !(await authorExists(author))) {
             return res.status(400).json({ message: `No author found with id ${author}` });
+        }
+
+        if (title !== undefined || author !== undefined) {
+            const finalTitle = title ?? existing.title;
+            const finalAuthor = author ?? existing.author;
+            if (await isDuplicateTitle(finalTitle, finalAuthor, id)) {
+                return duplicateTitle(res, finalTitle);
+            }
         }
 
         const book = await Book.findByIdAndUpdate(
