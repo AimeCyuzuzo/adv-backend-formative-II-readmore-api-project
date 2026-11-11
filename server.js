@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const authorRoutes = require('./routes/author.routes');
+const bookRoutes = require('./routes/book.routes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,6 +18,7 @@ app.get('/', (req, res) => {
 });
 
 app.use('/authors', authorRoutes);
+app.use('/books', bookRoutes);
 
 
 async function startServer() {

@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Author = require('../models/author.models');
+const Book = require('../models/book.models');
 
 const notFound = (res, id) =>
     res.status(404).json({ message: `No author found with id ${id}` });
@@ -82,10 +83,27 @@ const deleteAuthor = async (req, res) => {
     }
 };
 
+// GET /authors/:id/books
+const getAuthorBooks = async (req, res) => {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) return notFound(res, id);
+
+    try {
+        const author = await Author.findById(id);
+        if (!author) return notFound(res, id);
+
+        const books = await Book.find({ author: id }).sort({ publishedYear: 1 });
+        res.status(200).json({ author, count: books.length, books });
+    } catch (error) {
+        handleError(res, error);
+    }
+};
+
 module.exports = {
     createAuthor,
     getAllAuthors,
     getAuthorById,
     updateAuthor,
     deleteAuthor,
+    getAuthorBooks,
 };
